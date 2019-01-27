@@ -4,10 +4,10 @@
 
 module Lib where
 
-import Control.Monad
 import           Data.Default
 import           Data.ByteString                ( ByteString )
 import qualified Data.ByteString               as BS
+import           Data.Maybe
 import           Data.Text                      ( Text )
 import qualified Data.Text                     as T
 import           Data.Text.Encoding
@@ -39,28 +39,34 @@ parseDownloadUrls tags = map aHref downloadLinks
   downloadLinks = filter ((== "DOWNLOAD") . fromTagText . (!! 1)) aSections
   aHref         = BS.append "https://tenhou.net" . fromAttrib "href" . head
 
-downloadReplay :: ByteString -> FilePath -> IO ()
+downloadReplay :: ByteString -> FilePath -> IO (Maybe Text)
 downloadReplay url path = do
   let mfileName = fileNameFromUrl url
   case mfileName of
-    Nothing       -> putStrLn $ "*** Error getting file name from url: " ++ show url
+    Nothing       -> do
+      putStrLn $ "*** Error getting file name from url: " ++ show url
+      return Nothing
     Just fileName -> do
       let fullPath = path </> T.unpack fileName
       needsDownload <- shouldDownload fullPath
-      when needsDownload $ do
+      if needsDownload then do
         createDirectoryIfMissing True path
         case replay of
           Just r -> do
+            putStrLn $ T.unpack (decodeUtf8 url) ++ " ==>\n  " ++ fullPath
             responseBody <$> r >>= BS.writeFile fullPath
-            putStrLn $ "Downloaded replay to " ++ fullPath
-          Nothing -> putStrLn $ "*** Error parsing url: " ++ show url
+            return $ Just $ T.pack fullPath
+          Nothing -> do
+            putStrLn $ "*** Error parsing url: " ++ show url
+            return Nothing
+        else return Nothing
  where
   replay = case parseUrlHttps url of
     Just (u, s) -> Just $ runReq def $ req GET u NoReqBody bsResponse s
     Nothing     -> Nothing
 
-downloadReplays :: [ByteString] -> FilePath -> IO ()
-downloadReplays urls path = mapM_ (`downloadReplay` path) urls
+downloadReplays :: [ByteString] -> FilePath -> IO [Text]
+downloadReplays urls path = catMaybes <$> mapM (`downloadReplay` path) urls
 
 fileNameFromUrl :: ByteString -> Maybe Text
 fileNameFromUrl url =
