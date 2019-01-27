@@ -4,11 +4,10 @@
 
 module Lib where
 
-import           Control.Monad
+import Control.Monad
 import           Data.Default
 import           Data.ByteString                ( ByteString )
 import qualified Data.ByteString               as BS
-import           Data.Maybe
 import           Data.Text                      ( Text )
 import qualified Data.Text                     as T
 import           Data.Text.Encoding
@@ -40,30 +39,34 @@ parseDownloadUrls tags = map aHref downloadLinks
   downloadLinks = filter ((== "DOWNLOAD") . fromTagText . (!! 1)) aSections
   aHref         = BS.append "https://tenhou.net" . fromAttrib "href" . head
 
-downloadReplay :: Url 'Https -> Option 'Https -> FilePath -> IO ()
-downloadReplay url scheme path = do
-  fileName <- fileNameFromResponse <$> replay
-  let fullPath = path </> fromMaybe "replay.mjlog" fileName
-  createDirectoryIfMissing True path
-  responseBody <$> replay >>= BS.writeFile fullPath
-  putStrLn $ "Downloaded replay to " ++ fullPath
-  where replay = runReq def $ req GET url NoReqBody bsResponse scheme
+downloadReplay :: ByteString -> FilePath -> IO ()
+downloadReplay url path = do
+  let mfileName = fileNameFromUrl url
+  case mfileName of
+    Nothing       -> putStrLn $ "*** Error getting file name from url: " ++ show url
+    Just fileName -> do
+      let fullPath = path </> T.unpack fileName
+      needsDownload <- shouldDownload fullPath
+      when needsDownload $ do
+        createDirectoryIfMissing True path
+        case replay of
+          Just r -> do
+            responseBody <$> r >>= BS.writeFile fullPath
+            putStrLn $ "Downloaded replay to " ++ fullPath
+          Nothing -> putStrLn $ "*** Error parsing url: " ++ show url
+ where
+  replay = case parseUrlHttps url of
+    Just (u, s) -> Just $ runReq def $ req GET u NoReqBody bsResponse s
+    Nothing     -> Nothing
 
 downloadReplays :: [ByteString] -> FilePath -> IO ()
-downloadReplays urls path = do
-  newUrls <- filterM (shouldDownload path) urls
-  mapM_ (\u -> uncurry downloadReplay u path) $ mapMaybe parseUrlHttps newUrls
+downloadReplays urls path = mapM_ (`downloadReplay` path) urls
 
-shouldDownload :: FilePath -> ByteString -> IO Bool
-shouldDownload path url =
+fileNameFromUrl :: ByteString -> Maybe Text
+fileNameFromUrl url =
   let [_, queryParams] = T.splitOn "?" $ decodeUtf8 url
       mlogName         = T.stripPrefix "log=" queryParams
-  in  case mlogName of
-        Just logName -> fmap not $ doesFileExist $ path </> T.unpack logName ++ ".mjlog"
-        Nothing      -> return False
+  in  flip T.append ".mjlog" <$> mlogName
 
-fileNameFromResponse :: BsResponse -> Maybe FilePath
-fileNameFromResponse res =
-  T.unpack . T.filter (/= '"') . T.drop 21 . decodeUtf8 <$> responseHeader
-    res
-    "content-disposition"
+shouldDownload :: FilePath -> IO Bool
+shouldDownload path = not <$> doesFileExist path
