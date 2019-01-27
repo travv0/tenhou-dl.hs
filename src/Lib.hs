@@ -43,22 +43,23 @@ downloadReplay :: ByteString -> FilePath -> IO (Maybe Text)
 downloadReplay url path = do
   let mfileName = fileNameFromUrl url
   case mfileName of
-    Nothing       -> do
+    Nothing -> do
       putStrLn $ "*** Error getting file name from url: " ++ show url
       return Nothing
     Just fileName -> do
       let fullPath = path </> T.unpack fileName
       needsDownload <- shouldDownload fullPath
-      if needsDownload then do
-        createDirectoryIfMissing True path
-        case replay of
-          Just r -> do
-            putStrLn $ T.unpack (decodeUtf8 url) ++ " ==>\n  " ++ fullPath
-            responseBody <$> r >>= BS.writeFile fullPath
-            return $ Just $ T.pack fullPath
-          Nothing -> do
-            putStrLn $ "*** Error parsing url: " ++ show url
-            return Nothing
+      if needsDownload
+        then do
+          createDirectoryIfMissing True path
+          case replay of
+            Just r -> do
+              putStrLn $ T.unpack (decodeUtf8 url) ++ " ==>\n  " ++ fullPath
+              responseBody <$> r >>= BS.writeFile fullPath
+              return $ Just $ T.pack fullPath
+            Nothing -> do
+              putStrLn $ "*** Error parsing url: " ++ show url
+              return Nothing
         else return Nothing
  where
   replay = case parseUrlHttps url of
