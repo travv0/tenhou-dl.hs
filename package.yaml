@@ -1,0 +1,57 @@
+name:                tenhou-dl
+version:             0.1.0.0
+github:              "tssund93/tenhou-dl"
+license:             BSD3
+author:              "Travis"
+maintainer:          "tssund93@gmail.com"
+copyright:           "2019 Travis"
+
+extra-source-files:
+- README.md
+- ChangeLog.md
+
+# Metadata used when publishing your package
+# synopsis:            Short description of your package
+# category:            Web
+
+# To avoid duplicated efforts in documentation and dealing with the
+# complications of embedding Haddock markup inside cabal files, it is
+# common to point users to the README.md file.
+description:         Please see the README on GitHub at <https://github.com/githubuser/tenhou-dl#readme>
+
+dependencies:
+- base >= 4.7 && < 5
+- req
+- tagsoup
+- text
+- data-default
+- bytestring
+- filepath
+- directory
+- http-types
+- split
+
+library:
+  source-dirs: src
+
+executables:
+  tenhou-dl:
+    main:                Main.hs
+    source-dirs:         app
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - tenhou-dl
+
+tests:
+  tenhou-dl-test:
+    main:                Spec.hs
+    source-dirs:         test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - tenhou-dl
