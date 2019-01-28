@@ -47,11 +47,13 @@ downloadReplay url path = do
       putStrLn $ "*** Error getting file name from url: " ++ show url
       return Nothing
     Just fileName -> do
-      let fullPath = path </> T.unpack fileName
+      let subdir = T.take 6 fileName
+      let downloadPath = path </> T.unpack subdir
+      let fullPath = downloadPath </> T.unpack fileName
       needsDownload <- shouldDownload fullPath
       if needsDownload
         then do
-          createDirectoryIfMissing True path
+          createDirectoryIfMissing True downloadPath
           case replay of
             Just r -> do
               putStrLn $ T.unpack (decodeUtf8 url) ++ " ==>\n  " ++ fullPath
