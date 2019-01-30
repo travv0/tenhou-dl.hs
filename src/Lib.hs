@@ -11,7 +11,7 @@ import           Data.Maybe
 import           Data.Text                      ( Text )
 import qualified Data.Text                     as T
 import           Data.Text.Encoding
-import           Network.HTTP.Req hiding (Url)
+import           Network.HTTP.Req        hiding ( Url )
 import           System.FilePath
 import           System.Directory
 import           Text.HTML.TagSoup
@@ -49,16 +49,19 @@ downloadReplay url path = do
       putStrLn $ "*** Error getting file name from url: " ++ show (getUrl url)
       return Nothing
     Just fileName -> do
-      let subdir = T.take 6 fileName
+      let subdir       = T.take 6 fileName
       let downloadPath = path </> T.unpack subdir
-      let fullPath = downloadPath </> T.unpack fileName
+      let fullPath     = downloadPath </> T.unpack fileName
       needsDownload <- shouldDownload fullPath
       if needsDownload
         then do
           createDirectoryIfMissing True downloadPath
           case replay of
             Just r -> do
-              putStrLn $ T.unpack (decodeUtf8 $ getUrl url) ++ " ==>\n  " ++ fullPath
+              putStrLn
+                $  T.unpack (decodeUtf8 $ getUrl url)
+                ++ " ==>\n  "
+                ++ fullPath
               responseBody <$> r >>= BS.writeFile fullPath
               return $ Just fullPath
             Nothing -> do
