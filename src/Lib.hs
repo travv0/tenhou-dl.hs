@@ -11,12 +11,14 @@ import           Data.Maybe
 import           Data.Text                      ( Text )
 import qualified Data.Text                     as T
 import           Data.Text.Encoding
-import           Network.HTTP.Req
+import           Network.HTTP.Req hiding (Url)
 import           System.FilePath
 import           System.Directory
 import           Text.HTML.TagSoup
 
 newtype TenhouID = TenhouID {getTenhouID :: Text}
+
+newtype Url = Url {getUrl :: ByteString}
 
 getResponse :: TenhouID -> IO BsResponse
 getResponse tenhouId = runReq def $ req
@@ -32,19 +34,19 @@ parseResponseTags = parseTags . responseBody
 getTags :: TenhouID -> IO [Tag ByteString]
 getTags = fmap parseResponseTags . getResponse
 
-parseDownloadUrls :: [Tag ByteString] -> [ByteString]
-parseDownloadUrls tags = map aHref downloadLinks
+parseDownloadUrls :: [Tag ByteString] -> [Url]
+parseDownloadUrls tags = map (Url . aHref) downloadLinks
  where
   aSections     = sections (~== ("<a>" :: String)) tags
   downloadLinks = filter ((== "DOWNLOAD") . fromTagText . (!! 1)) aSections
   aHref         = BS.append "https://tenhou.net" . fromAttrib "href" . head
 
-downloadReplay :: ByteString -> FilePath -> IO (Maybe Text)
+downloadReplay :: Url -> FilePath -> IO (Maybe FilePath)
 downloadReplay url path = do
   let mfileName = fileNameFromUrl url
   case mfileName of
     Nothing -> do
-      putStrLn $ "*** Error getting file name from url: " ++ show url
+      putStrLn $ "*** Error getting file name from url: " ++ show (getUrl url)
       return Nothing
     Just fileName -> do
       let subdir = T.take 6 fileName
@@ -56,24 +58,24 @@ downloadReplay url path = do
           createDirectoryIfMissing True downloadPath
           case replay of
             Just r -> do
-              putStrLn $ T.unpack (decodeUtf8 url) ++ " ==>\n  " ++ fullPath
+              putStrLn $ T.unpack (decodeUtf8 $ getUrl url) ++ " ==>\n  " ++ fullPath
               responseBody <$> r >>= BS.writeFile fullPath
-              return $ Just $ T.pack fullPath
+              return $ Just fullPath
             Nothing -> do
-              putStrLn $ "*** Error parsing url: " ++ show url
+              putStrLn $ "*** Error parsing url: " ++ show (getUrl url)
               return Nothing
         else return Nothing
  where
-  replay = case parseUrlHttps url of
+  replay = case parseUrlHttps (getUrl url) of
     Just (u, s) -> Just $ runReq def $ req GET u NoReqBody bsResponse s
     Nothing     -> Nothing
 
-downloadReplays :: [ByteString] -> FilePath -> IO [Text]
+downloadReplays :: [Url] -> FilePath -> IO [FilePath]
 downloadReplays urls path = catMaybes <$> mapM (`downloadReplay` path) urls
 
-fileNameFromUrl :: ByteString -> Maybe Text
+fileNameFromUrl :: Url -> Maybe Text
 fileNameFromUrl url =
-  let [_, queryParams] = T.splitOn "?" $ decodeUtf8 url
+  let [_, queryParams] = T.splitOn "?" $ decodeUtf8 (getUrl url)
       mlogName         = T.stripPrefix "log=" queryParams
   in  flip T.append ".mjlog" <$> mlogName
 
