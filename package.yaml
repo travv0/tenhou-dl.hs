@@ -30,6 +30,7 @@ dependencies:
 - directory
 - http-types
 - split
+- mtl
 
 library:
   source-dirs: src
@@ -40,6 +41,7 @@ executables:
     source-dirs:         app
     ghc-options:
     - -Wall
+    - -Werror
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
