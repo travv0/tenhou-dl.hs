@@ -5,8 +5,12 @@ import           Lib
 import qualified Data.Text                     as T
 import           System.Environment
 
+version :: String
+version = "1.0.0"
+
 main :: IO ()
 main = do
+  putStrLn $ "tenhou-dl v" ++ version
   args <- getArgs
   if length args < 2
     then
