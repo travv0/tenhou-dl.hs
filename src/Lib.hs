@@ -4,6 +4,7 @@
 
 module Lib where
 
+import           Control.Monad.Except
 import           Data.Default
 import           Data.ByteString                ( ByteString )
 import qualified Data.ByteString               as BS
@@ -41,46 +42,58 @@ parseDownloadUrls tags = map (Url . aHref) downloadLinks
   downloadLinks = filter ((== "DOWNLOAD") . fromTagText . (!! 1)) aSections
   aHref         = BS.append "https://tenhou.net" . fromAttrib "href" . head
 
-downloadReplay :: Url -> FilePath -> IO (Maybe FilePath)
+downloadReplay :: Url -> FilePath -> ExceptT String IO (Maybe FilePath)
 downloadReplay url path = do
-  let mfileName = fileNameFromUrl url
-  case mfileName of
-    Nothing -> do
-      putStrLn $ "*** Error getting file name from url: " ++ show (getUrl url)
-      return Nothing
-    Just fileName -> do
-      let subdir       = T.take 6 fileName
-      let downloadPath = path </> T.unpack subdir
-      let fullPath     = downloadPath </> T.unpack fileName
-      needsDownload <- shouldDownload fullPath
-      if needsDownload
-        then do
-          createDirectoryIfMissing True downloadPath
-          case replay of
-            Just r -> do
-              putStrLn
-                $  T.unpack (decodeUtf8 $ getUrl url)
-                ++ " ==>\n  "
-                ++ fullPath
-              responseBody <$> r >>= BS.writeFile fullPath
-              return $ Just fullPath
-            Nothing -> do
-              putStrLn $ "*** Error parsing url: " ++ show (getUrl url)
-              return Nothing
-        else return Nothing
- where
-  replay = case parseUrlHttps (getUrl url) of
-    Just (u, s) -> Just $ runReq def $ req GET u NoReqBody bsResponse s
-    Nothing     -> Nothing
+  fileName <- liftEither $ fileNameFromUrl url
+  let subdir       = T.take 6 fileName
+  let downloadPath = path </> T.unpack subdir
+  let fullPath     = downloadPath </> T.unpack fileName
+  needsDownload <- liftIO $ shouldDownload fullPath
+  if needsDownload
+    then do
+      liftIO $ createDirectoryIfMissing True downloadPath
+      replay <- liftEither $ getResponseFromUrl url
+      liftIO
+        $  putStrLn
+        $  T.unpack (decodeUtf8 $ getUrl url)
+        ++ " ==>\n  "
+        ++ fullPath
+      liftIO $ responseBody <$> replay >>= BS.writeFile fullPath
+      return $ Just fullPath
+    else return Nothing
+
+getResponseFromUrl :: Url -> Either String (IO BsResponse)
+getResponseFromUrl url = case parseUrlHttps (getUrl url) of
+  Just (u, s) -> Right $ runReq def $ req GET u NoReqBody bsResponse s
+  Nothing     -> Left $ "Error parsing url: " ++ show (getUrl url)
 
 downloadReplays :: [Url] -> FilePath -> IO [FilePath]
-downloadReplays urls path = catMaybes <$> mapM (`downloadReplay` path) urls
+downloadReplays urls path =
+  catMaybes
+    <$> mapM (\u -> runExceptT (downloadReplay u path) >>= unwrapOrPrintError)
+             urls
 
-fileNameFromUrl :: Url -> Maybe Text
-fileNameFromUrl url =
-  let [_, queryParams] = T.splitOn "?" $ decodeUtf8 (getUrl url)
-      mlogName         = T.stripPrefix "log=" queryParams
-  in  flip T.append ".mjlog" <$> mlogName
+unwrapOrPrintError :: Either String (Maybe FilePath) -> IO (Maybe FilePath)
+unwrapOrPrintError (Left  e) = putStrLn ("*** " ++ e) >> return Nothing
+unwrapOrPrintError (Right p) = return p
+
+maybeToEither :: b -> Maybe a -> Either b a
+maybeToEither = flip maybe Right . Left
+
+fileNameFromUrl :: Url -> Either String Text
+fileNameFromUrl url = do
+  let splitUrl = T.splitOn "?" $ decodeUtf8 (getUrl url)
+  queryParams <- case splitUrl of
+    (_ : ps : _) -> Right ps
+    _ ->
+      Left $ "Error getting query parameters from url: " ++ show (getUrl url)
+  logName <-
+    maybeToEither
+        (  "Error getting log name from query parameters: "
+        ++ T.unpack queryParams
+        )
+      $ T.stripPrefix "log=" queryParams
+  return $ T.append logName ".mjlog"
 
 shouldDownload :: FilePath -> IO Bool
 shouldDownload path = not <$> doesFileExist path
