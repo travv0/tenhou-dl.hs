@@ -42,8 +42,8 @@ parseDownloadUrls tags = map (Url . aHref) downloadLinks
   downloadLinks = filter ((== "DOWNLOAD") . fromTagText . (!! 1)) aSections
   aHref         = BS.append "https://tenhou.net" . fromAttrib "href" . head
 
-downloadReplay :: Url -> FilePath -> ExceptT String IO (Maybe FilePath)
-downloadReplay url path = do
+downloadReplay :: Url -> FilePath -> IO (Either String (Maybe FilePath))
+downloadReplay url path = runExceptT $ do
   fileName <- liftEither $ fileNameFromUrl url
   let subdir       = T.take 6 fileName
   let downloadPath = path </> T.unpack subdir
@@ -69,9 +69,7 @@ getResponseFromUrl url = case parseUrlHttps (getUrl url) of
 
 downloadReplays :: [Url] -> FilePath -> IO [FilePath]
 downloadReplays urls path =
-  catMaybes
-    <$> mapM (\u -> runExceptT (downloadReplay u path) >>= unwrapOrPrintError)
-             urls
+  catMaybes <$> mapM (\u -> downloadReplay u path >>= unwrapOrPrintError) urls
 
 unwrapOrPrintError :: Either String (Maybe FilePath) -> IO (Maybe FilePath)
 unwrapOrPrintError (Left  e) = putStrLn ("*** " ++ e) >> return Nothing
