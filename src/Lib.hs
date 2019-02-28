@@ -19,7 +19,7 @@ import           Text.HTML.TagSoup
 
 newtype TenhouID = TenhouID {getTenhouID :: Text}
 
-newtype Url = Url {getUrl :: ByteString}
+newtype Url = Url {getUrl :: Text}
 
 getResponse :: TenhouID -> IO BsResponse
 getResponse tenhouId = runReq def $ req
@@ -36,7 +36,7 @@ getTags :: TenhouID -> IO [Tag ByteString]
 getTags = fmap parseResponseTags . getResponse
 
 parseDownloadUrls :: [Tag ByteString] -> [Url]
-parseDownloadUrls tags = map (Url . aHref) downloadLinks
+parseDownloadUrls tags = map (Url . decodeUtf8 . aHref) downloadLinks
  where
   aSections     = sections (~== ("<a>" :: String)) tags
   downloadLinks = filter ((== "DOWNLOAD") . fromTagText . (!! 1)) aSections
@@ -53,17 +53,13 @@ downloadReplay url path = runExceptT $ do
     then do
       liftIO $ createDirectoryIfMissing True downloadPath
       replay <- liftEither $ getResponseFromUrl url
-      liftIO
-        $  putStrLn
-        $  T.unpack (decodeUtf8 $ getUrl url)
-        ++ " ==>\n  "
-        ++ fullPath
+      liftIO $ putStrLn $ T.unpack (getUrl url) ++ " ==>\n  " ++ fullPath
       liftIO $ responseBody <$> replay >>= BS.writeFile fullPath
       return $ Just fullPath
     else return Nothing
 
 getResponseFromUrl :: Url -> Either String (IO BsResponse)
-getResponseFromUrl url = case parseUrlHttps (getUrl url) of
+getResponseFromUrl url = case parseUrlHttps (encodeUtf8 $ getUrl url) of
   Just (u, s) -> Right $ runReq def $ req GET u NoReqBody bsResponse s
   Nothing     -> Left $ "Error parsing url: " ++ show (getUrl url)
 
@@ -80,7 +76,7 @@ maybeToEither = flip maybe Right . Left
 
 fileNameFromUrl :: Url -> Either String Text
 fileNameFromUrl url = do
-  let splitUrl = T.splitOn "?" $ decodeUtf8 (getUrl url)
+  let splitUrl = T.splitOn "?" $ getUrl url
   queryParams <- case splitUrl of
     (_ : ps : _) -> Right ps
     _ ->
