@@ -5,17 +5,17 @@
 module Lib where
 
 import           Control.Monad.Except
-import           Data.Default
 import           Data.ByteString                ( ByteString )
-import qualified Data.ByteString               as BS
+import           Data.Default
 import           Data.Maybe
 import           Data.Text                      ( Text )
-import qualified Data.Text                     as T
 import           Data.Text.Encoding
 import           Network.HTTP.Req        hiding ( Url )
-import           System.FilePath
 import           System.Directory
+import           System.FilePath
 import           Text.HTML.TagSoup
+import qualified Data.ByteString               as BS
+import qualified Data.Text                     as T
 
 newtype TenhouID = TenhouID {getTenhouID :: Text}
 
