@@ -6,13 +6,13 @@ import qualified Data.Text                     as T
 import           System.Environment
 
 version :: String
-version = "1.0.0"
+version = "1.0.1"
 
 main :: IO ()
 main = do
   putStrLn $ "tenhou-dl v" ++ version
   args <- getArgs
-  if length args < 2
+  if length args /= 2
     then
       putStrLn
       $  "Usage: tenhou-dl <Tenhou ID> <Log path>\n"
