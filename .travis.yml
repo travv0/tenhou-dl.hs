@@ -1,7 +1,5 @@
 sudo: false
 language: generic
-services:
-- postgresql
 env:
   matrix:
   - GHCVER=8.4.3 STACK_YAML=stack.yaml
