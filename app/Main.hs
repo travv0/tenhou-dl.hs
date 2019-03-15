@@ -2,8 +2,8 @@ module Main where
 
 import           Lib
 
-import qualified Data.Text                     as T
 import           System.Environment
+import qualified Data.Text                     as T
 
 version :: String
 version = "1.0.1"

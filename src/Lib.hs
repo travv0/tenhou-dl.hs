@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
 
@@ -23,8 +24,14 @@ newtype TenhouID = TenhouID {getTenhouID :: Text}
 newtype Url = Url {getUrl :: Text}
   deriving Show
 
-getResponse :: TenhouID -> IO BsResponse
-getResponse tenhouId = runReq def $ req
+class MonadIO m => MonadRequest m where
+  runRequest :: MonadIO m => HttpConfig -> Req a -> m a
+
+instance MonadRequest IO where
+  runRequest = runReq
+
+getResponse :: MonadRequest m => TenhouID -> m BsResponse
+getResponse tenhouId = runRequest def $ req
   GET
   (https "tenhou.net" /: "0" /: "log" /: "find.cgi")
   NoReqBody
@@ -34,7 +41,7 @@ getResponse tenhouId = runReq def $ req
 parseResponseTags :: BsResponse -> [Tag ByteString]
 parseResponseTags = parseTags . responseBody
 
-getTags :: TenhouID -> IO [Tag ByteString]
+getTags :: MonadRequest m => TenhouID -> m [Tag ByteString]
 getTags = fmap parseResponseTags . getResponse
 
 parseDownloadUrls :: [Tag ByteString] -> [Url]
