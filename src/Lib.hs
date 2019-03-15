@@ -18,8 +18,10 @@ import qualified Data.ByteString               as BS
 import qualified Data.Text                     as T
 
 newtype TenhouID = TenhouID {getTenhouID :: Text}
+  deriving Show
 
 newtype Url = Url {getUrl :: Text}
+  deriving Show
 
 getResponse :: TenhouID -> IO BsResponse
 getResponse tenhouId = runReq def $ req
