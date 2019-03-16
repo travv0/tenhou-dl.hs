@@ -1,9 +1,12 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Lib where
+
+import           Prelude                 hiding ( writeFile )
 
 import           Control.Monad.Except
 import           Data.ByteString                ( ByteString )
@@ -12,7 +15,7 @@ import           Data.Maybe
 import           Data.Text                      ( Text )
 import           Data.Text.Encoding
 import           Network.HTTP.Req        hiding ( Url )
-import           System.Directory
+import qualified System.Directory              as D
 import           System.FilePath
 import           Text.HTML.TagSoup
 import qualified Data.ByteString               as BS
@@ -24,11 +27,21 @@ newtype TenhouID = TenhouID {getTenhouID :: Text}
 newtype Url = Url {getUrl :: Text}
   deriving Show
 
-class MonadIO m => MonadRequest m where
-  runRequest :: MonadIO m => HttpConfig -> Req a -> m a
+class Monad m => MonadRequest m where
+  runRequest :: HttpConfig -> Req a -> m a
 
 instance MonadRequest IO where
   runRequest = runReq
+
+class Monad m => MonadFS m where
+  doesFileExist :: FilePath -> m Bool
+  createDirectoryIfMissing :: Bool -> FilePath -> m ()
+  writeFile :: FilePath -> ByteString -> m ()
+
+instance MonadFS IO where
+  doesFileExist = D.doesFileExist
+  createDirectoryIfMissing = D.createDirectoryIfMissing
+  writeFile = BS.writeFile
 
 getResponse :: MonadRequest m => TenhouID -> m BsResponse
 getResponse tenhouId = runRequest def $ req
@@ -51,34 +64,53 @@ parseDownloadUrls tags = map (Url . decodeUtf8 . aHref) downloadLinks
   downloadLinks = filter ((== "DOWNLOAD") . fromTagText . (!! 1)) aSections
   aHref         = BS.append "https://tenhou.net" . fromAttrib "href" . head
 
-downloadReplay :: Url -> FilePath -> IO (Either String (Maybe FilePath))
+downloadReplay
+  :: (MonadFS m, MonadRequest m)
+  => Url
+  -> FilePath
+  -> m (Either String (Maybe FilePath))
 downloadReplay url path = runExceptT $ do
   fileName <- liftEither $ fileNameFromUrl url
   let subdir       = T.take 6 fileName
   let downloadPath = path </> T.unpack subdir
   let fullPath     = downloadPath </> T.unpack fileName
-  needsDownload <- liftIO $ shouldDownload fullPath
+  needsDownload <- lift $ shouldDownload fullPath
   if needsDownload
     then do
-      liftIO $ createDirectoryIfMissing True downloadPath
-      replay <- liftEither $ getResponseFromUrl url
-      liftIO $ putStrLn $ T.unpack (getUrl url) ++ " ==>\n  " ++ fullPath
-      liftIO $ responseBody <$> replay >>= BS.writeFile fullPath
+      lift $ createDirectoryIfMissing True downloadPath
+      response <- lift $ getResponseFromUrl url
+      replay   <- liftEither response
+      lift $ writeFile fullPath $ responseBody replay
       return $ Just fullPath
     else return Nothing
 
-getResponseFromUrl :: Url -> Either String (IO BsResponse)
+getResponseFromUrl :: MonadRequest m => Url -> m (Either String BsResponse)
 getResponseFromUrl url = case parseUrlHttps (encodeUtf8 $ getUrl url) of
-  Just (u, s) -> Right $ runReq def $ req GET u NoReqBody bsResponse s
-  Nothing     -> Left $ "Error parsing url: " ++ show (getUrl url)
+  Just (u, s) ->
+    sequence . Right $ runRequest def $ req GET u NoReqBody bsResponse s
+  Nothing -> return . Left $ "Error parsing url: " ++ show (getUrl url)
 
-downloadReplays :: [Url] -> FilePath -> IO [FilePath]
+downloadReplays
+  :: (MonadIO m, MonadFS m, MonadRequest m) => [Url] -> FilePath -> m [FilePath]
 downloadReplays urls path =
-  catMaybes <$> mapM (\u -> downloadReplay u path >>= unwrapOrPrintError) urls
+  catMaybes
+    <$> mapM
+          (\u -> do
+            epath <- downloadReplay u path
+            mpath <- unwrapOrPrintError epath
+            mapM_ (printCopyString u) mpath
+            return mpath
+          )
+          urls
 
-unwrapOrPrintError :: Either String (Maybe FilePath) -> IO (Maybe FilePath)
-unwrapOrPrintError (Left  e) = putStrLn ("*** " ++ e) >> return Nothing
+unwrapOrPrintError
+  :: MonadIO m => Either String (Maybe FilePath) -> m (Maybe FilePath)
+unwrapOrPrintError (Left  e) = liftIO $ putStrLn ("*** " ++ e) >> return Nothing
 unwrapOrPrintError (Right p) = return p
+
+printCopyString :: MonadIO m => Url -> FilePath -> m ()
+printCopyString url path =
+  liftIO $ putStrLn $ T.unpack (getUrl url) ++ " ==>\n  " ++ path
 
 maybeToEither :: b -> Maybe a -> Either b a
 maybeToEither = flip maybe Right . Left
@@ -98,5 +130,5 @@ fileNameFromUrl url = do
       $ T.stripPrefix "log=" queryParams
   return $ T.append logName ".mjlog"
 
-shouldDownload :: FilePath -> IO Bool
+shouldDownload :: MonadFS m => FilePath -> m Bool
 shouldDownload path = not <$> doesFileExist path
