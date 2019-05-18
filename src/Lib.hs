@@ -14,6 +14,7 @@ import           Network.HTTP.Req        hiding ( Url )
 import           System.Directory
 import           System.FilePath
 import           Text.HTML.TagSoup
+import qualified Control.Monad.Parallel        as P
 import qualified Data.ByteString               as BS
 import qualified Data.Text                     as T
 
@@ -67,7 +68,7 @@ getResponseFromUrl url = case parseUrlHttps (encodeUtf8 $ getUrl url) of
 
 downloadReplays :: [Url] -> FilePath -> IO [FilePath]
 downloadReplays urls path =
-  catMaybes <$> mapM (\u -> downloadReplay u path >>= unwrapOrPrintError) urls
+  catMaybes <$> P.mapM (\u -> downloadReplay u path >>= unwrapOrPrintError) urls
 
 unwrapOrPrintError :: Either String (Maybe FilePath) -> IO (Maybe FilePath)
 unwrapOrPrintError (Left  e) = putStrLn ("*** " ++ e) >> return Nothing
