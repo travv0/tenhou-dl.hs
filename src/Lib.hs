@@ -57,21 +57,22 @@ downloadReplay lock url path = runExceptT $ do
   if needsDownload
     then do
       liftIO $ createDirectoryIfMissing True downloadPath
-      replay <- liftEither $ getResponseFromUrl url
+      replay <- liftIO (getResponseFromUrl url) >>= liftEither
       liftIO
         $  Lock.with lock
         $  putStrLn
         $  T.unpack (getUrl url)
         ++ " ==>\n  "
         ++ fullPath
-      liftIO $ responseBody <$> replay >>= BS.writeFile fullPath
+      liftIO $ BS.writeFile fullPath $ responseBody replay
       return $ Just fullPath
     else return Nothing
 
-getResponseFromUrl :: Url -> Either String (IO BsResponse)
+getResponseFromUrl :: Url -> IO (Either String BsResponse)
 getResponseFromUrl url = case parseUrlHttps (encodeUtf8 $ getUrl url) of
-  Just (u, s) -> Right $ runReq def $ req GET u NoReqBody bsResponse s
-  Nothing     -> Left $ "Error parsing url: " ++ show (getUrl url)
+  Just (u, s) ->
+    sequence $ Right $ runReq def $ req GET u NoReqBody bsResponse s
+  Nothing -> return $ Left $ "Error parsing url: " ++ show (getUrl url)
 
 downloadReplays :: [Url] -> FilePath -> IO [FilePath]
 downloadReplays urls path = do
