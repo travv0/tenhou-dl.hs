@@ -1,5 +1,5 @@
 name:                tenhou-dl
-version:             1.0.1
+version:             1.0.2
 github:              "tssund93/tenhou-dl"
 license:             BSD3
 author:              "Travis"
@@ -32,6 +32,7 @@ dependencies:
 - split
 - mtl
 - monad-parallel
+- concurrent-extra
 
 library:
   source-dirs: src

@@ -6,7 +6,7 @@ import qualified Data.Text                     as T
 import           System.Environment
 
 version :: String
-version = "1.0.1"
+version = "1.0.2"
 
 main :: IO ()
 main = do

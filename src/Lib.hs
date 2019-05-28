@@ -4,6 +4,7 @@
 
 module Lib where
 
+import           Control.Concurrent.Lock        ( Lock )
 import           Control.Monad.Except
 import           Data.ByteString                ( ByteString )
 import           Data.Default
@@ -14,6 +15,7 @@ import           Network.HTTP.Req        hiding ( Url )
 import           System.Directory
 import           System.FilePath
 import           Text.HTML.TagSoup
+import qualified Control.Concurrent.Lock       as Lock
 import qualified Control.Monad.Parallel        as P
 import qualified Data.ByteString               as BS
 import qualified Data.Text                     as T
@@ -45,8 +47,8 @@ parseDownloadUrls tags = map (Url . decodeUtf8 . aHref) downloadLinks
   downloadLinks = filter ((== "DOWNLOAD") . fromTagText . (!! 1)) aSections
   aHref         = BS.append "https://tenhou.net" . fromAttrib "href" . head
 
-downloadReplay :: Url -> FilePath -> IO (Either String (Maybe FilePath))
-downloadReplay url path = runExceptT $ do
+downloadReplay :: Lock -> Url -> FilePath -> IO (Either String (Maybe FilePath))
+downloadReplay lock url path = runExceptT $ do
   fileName <- liftEither $ fileNameFromUrl url
   let subdir       = T.take 6 fileName
   let downloadPath = path </> T.unpack subdir
@@ -56,7 +58,12 @@ downloadReplay url path = runExceptT $ do
     then do
       liftIO $ createDirectoryIfMissing True downloadPath
       replay <- liftEither $ getResponseFromUrl url
-      liftIO $ putStrLn $ T.unpack (getUrl url) ++ " ==>\n  " ++ fullPath
+      liftIO
+        $  Lock.with lock
+        $  putStrLn
+        $  T.unpack (getUrl url)
+        ++ " ==>\n  "
+        ++ fullPath
       liftIO $ responseBody <$> replay >>= BS.writeFile fullPath
       return $ Just fullPath
     else return Nothing
@@ -67,8 +74,10 @@ getResponseFromUrl url = case parseUrlHttps (encodeUtf8 $ getUrl url) of
   Nothing     -> Left $ "Error parsing url: " ++ show (getUrl url)
 
 downloadReplays :: [Url] -> FilePath -> IO [FilePath]
-downloadReplays urls path =
-  catMaybes <$> P.mapM (\u -> downloadReplay u path >>= unwrapOrPrintError) urls
+downloadReplays urls path = do
+  lock <- Lock.new
+  catMaybes
+    <$> P.mapM (\u -> downloadReplay lock u path >>= unwrapOrPrintError) urls
 
 unwrapOrPrintError :: Either String (Maybe FilePath) -> IO (Maybe FilePath)
 unwrapOrPrintError (Left  e) = putStrLn ("*** " ++ e) >> return Nothing
