@@ -27,12 +27,12 @@ newtype Url = Url {getUrl :: Text}
   deriving Show
 
 getResponse :: TenhouID -> IO BsResponse
-getResponse tenhouId = runReq def $ req
+getResponse (TenhouID tenhouId) = runReq def $ req
   GET
   (https "tenhou.net" /: "0" /: "log" /: "find.cgi")
   NoReqBody
   bsResponse
-  ("un" =: getTenhouID tenhouId)
+  ("un" =: tenhouId)
 
 parseResponseTags :: BsResponse -> [Tag ByteString]
 parseResponseTags = parseTags . responseBody
@@ -69,10 +69,10 @@ downloadReplay lock url path = runExceptT $ do
     else return Nothing
 
 getResponseFromUrl :: Url -> IO (Either String BsResponse)
-getResponseFromUrl url = case parseUrlHttps (encodeUtf8 $ getUrl url) of
+getResponseFromUrl (Url url) = case parseUrlHttps (encodeUtf8 url) of
   Just (u, s) ->
     sequence $ Right $ runReq def $ req GET u NoReqBody bsResponse s
-  Nothing -> return $ Left $ "Error parsing url: " ++ show (getUrl url)
+  Nothing -> return $ Left $ "Error parsing url: " ++ show url
 
 downloadReplays :: [Url] -> FilePath -> IO [FilePath]
 downloadReplays urls path = do
@@ -88,12 +88,11 @@ maybeToEither :: b -> Maybe a -> Either b a
 maybeToEither = flip maybe Right . Left
 
 fileNameFromUrl :: Url -> Either String Text
-fileNameFromUrl url = do
-  let splitUrl = T.splitOn "?" $ getUrl url
+fileNameFromUrl (Url url) = do
+  let splitUrl = T.splitOn "?" url
   queryParams <- case splitUrl of
     (_ : ps : _) -> Right ps
-    _ ->
-      Left $ "Error getting query parameters from url: " ++ show (getUrl url)
+    _ -> Left $ "Error getting query parameters from url: " ++ show url
   logName <-
     maybeToEither
         (  "Error getting log name from query parameters: "
