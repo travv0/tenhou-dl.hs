@@ -17,7 +17,8 @@
 #
 # resolver: ./custom-snapshot.yaml
 # resolver: https://example.com/snapshots/2018-01-01.yaml
-resolver: lts-13.5
+# resolver: lts-14.27
+resolver: lts-14.27
 
 # User packages to be built.
 # Various formats can be used as shown in the example below.
@@ -37,7 +38,15 @@ packages:
 # Dependency packages to be pulled from upstream that are not in the resolver
 # using the same syntax as the packages field.
 # (e.g., acme-missiles-0.3)
-# extra-deps: []
+extra-deps:
+- req-1.2.1@sha256:d2db586ab7fe07efc82fef2082e88f5728c472c08728c985aacf142c661675e9,5034
+- connection-0.2.8@sha256:b33ed18b274e9d65ffefcda46ba3d6ff852bec1e7ffcb686985228dc52631c2e,1525
+- retry-0.7.7.0@sha256:7b00ea9a64adec514a830209ae3d75919d5b510eb688783634f61469b4d3d182,2292
+- socks-0.5.6@sha256:bb051589a00d18301556dbff82d89955a5534baf91a5e050e5f3a65f3415609c,1299
+
+nix:
+  enable: true
+  packages: [zlib]
 
 # Override default flag values for local packages and extra-deps
 # flags: {}
