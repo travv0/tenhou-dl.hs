@@ -45,7 +45,6 @@ extra-deps:
 - socks-0.5.6@sha256:bb051589a00d18301556dbff82d89955a5534baf91a5e050e5f3a65f3415609c,1299
 
 nix:
-  enable: true
   packages: [zlib]
 
 # Override default flag values for local packages and extra-deps
