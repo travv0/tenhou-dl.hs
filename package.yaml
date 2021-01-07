@@ -21,18 +21,19 @@ description:         Please see the README on GitHub at <https://github.com/gith
 
 dependencies:
 - base >= 4.7 && < 5
+- bytestring
+- concurrent-extra
+- data-default
+- directory
+- exceptions
+- filepath
+- http-types
+- monad-parallel
+- mtl
 - req < 2.0
+- split
 - tagsoup
 - text
-- data-default
-- bytestring
-- filepath
-- directory
-- http-types
-- split
-- mtl
-- monad-parallel
-- concurrent-extra
 
 library:
   source-dirs: src
