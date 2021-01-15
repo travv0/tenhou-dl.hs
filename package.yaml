@@ -1,5 +1,5 @@
 name:                tenhou-dl
-version:             1.0.2
+version:             1.1.0
 github:              "tssund93/tenhou-dl"
 license:             BSD3
 author:              "Travis"
@@ -23,20 +23,20 @@ dependencies:
 - base >= 4.7 && < 5
 - bytestring
 - concurrent-extra
-- data-default
 - directory
 - exceptions
 - filepath
-- http-types
+- lens
 - monad-parallel
-- mtl
-- req < 2.0
-- split
 - tagsoup
 - text
+- wreq
 
 library:
   source-dirs: src
+  ghc-options:
+  - -Wall
+  - -Werror
 
 executables:
   tenhou-dl:
