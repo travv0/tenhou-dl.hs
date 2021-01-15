@@ -3,14 +3,13 @@ module Main where
 import Lib
 
 import qualified Data.Text as T
-import System.Environment
-
-version :: String
-version = "1.0.2"
+import Data.Version (showVersion)
+import Paths_tenhou_dl (version)
+import System.Environment (getArgs)
 
 main :: IO ()
 main = do
-  putStrLn $ "tenhou-dl v" ++ version
+  putStrLn $ "tenhou-dl v" ++ showVersion version
   args <- getArgs
   case args of
     [tenhouId, path] -> do
