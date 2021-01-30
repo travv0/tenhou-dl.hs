@@ -18,18 +18,25 @@ import Network.Wreq (Response, get, responseBody)
 import qualified Network.Wreq as W
 import System.Directory (createDirectoryIfMissing, doesFileExist)
 import System.FilePath ((</>))
-import Text.HTML.TagSoup (Tag, fromAttrib, fromTagText, parseTags, sections, (~==))
+import Text.HTML.TagSoup (
+    Tag,
+    fromAttrib,
+    fromTagText,
+    parseTags,
+    sections,
+    (~==),
+ )
 
 newtype TenhouID = TenhouID {getTenhouID :: Text}
-  deriving (Show)
+    deriving (Show)
 
 newtype Url = Url {getUrl :: Text}
-  deriving (Show)
+    deriving (Show)
 
 getResponse :: TenhouID -> IO (Response ByteString)
 getResponse (TenhouID tenhouId) =
-  let options = W.defaults & W.param "un" .~ [tenhouId]
-   in W.getWith options "https://tenhou.net/0/log/find.cgi"
+    let options = W.defaults & W.param "un" .~ [tenhouId]
+     in W.getWith options "https://tenhou.net/0/log/find.cgi"
 
 parseResponseTags :: Response ByteString -> [Tag ByteString]
 parseResponseTags = parseTags . view responseBody
@@ -39,54 +46,59 @@ getTags = fmap parseResponseTags . getResponse
 
 parseDownloadUrls :: [Tag ByteString] -> [Url]
 parseDownloadUrls tags =
-  map
-    ( Url
-        . decodeUtf8
-        . BS.toStrict
-        . aHref
-    )
-    downloadLinks
- where
-  aSections = sections (~== ("<a>" :: String)) tags
-  downloadLinks = filter ((== "DOWNLOAD") . fromTagText . (!! 1)) aSections
-  aHref = BS.append "https://tenhou.net" . fromAttrib "href" . head
+    map
+        ( Url
+            . decodeUtf8
+            . BS.toStrict
+            . aHref
+        )
+        downloadLinks
+  where
+    aSections = sections (~== ("<a>" :: String)) tags
+    downloadLinks = filter ((== "DOWNLOAD") . fromTagText . (!! 1)) aSections
+    aHref = BS.append "https://tenhou.net" . fromAttrib "href" . head
 
 downloadReplay :: Lock -> Url -> FilePath -> IO (Either String (Maybe FilePath))
 downloadReplay lock url path =
-  let efileName = fileNameFromUrl url
-   in case efileName of
-        Left e -> return $ Left e
-        Right fileName -> do
-          let subdir = T.take 6 fileName
-          let downloadPath = path </> T.unpack subdir
-          let fullPath = downloadPath </> T.unpack fileName
-          needsDownload <- shouldDownload fullPath
-          if needsDownload
-            then do
-              createDirectoryIfMissing True downloadPath
-              replay <- getResponseFromUrl url
-              Lock.with lock $
-                putStrLn $
-                  T.unpack (getUrl url)
-                    ++ " ==>\n  "
-                    ++ fullPath
-              BS.writeFile fullPath $ replay ^. responseBody
-              return $ Right $ Just fullPath
-            else return $ Right Nothing
-        `catchAll` \e -> return $ Left $ show e
+    let efileName = fileNameFromUrl url
+     in case efileName of
+            Left e -> return $ Left e
+            Right fileName -> do
+                let subdir = T.take 6 fileName
+                let downloadPath = path </> T.unpack subdir
+                let fullPath = downloadPath </> T.unpack fileName
+                needsDownload <- shouldDownload fullPath
+                if needsDownload
+                    then do
+                        createDirectoryIfMissing True downloadPath
+                        replay <- getResponseFromUrl url
+                        Lock.with lock $
+                            putStrLn $
+                                T.unpack (getUrl url)
+                                    ++ " ==>\n  "
+                                    ++ fullPath
+                        BS.writeFile fullPath $ replay ^. responseBody
+                        return $ Right $ Just fullPath
+                    else return $ Right Nothing
+            `catchAll` \e -> return $ Left $ show e
 
 getResponseFromUrl :: Url -> IO (Response ByteString)
 getResponseFromUrl (Url url) = get $ T.unpack url
 
 downloadReplays :: [Url] -> FilePath -> IO [FilePath]
 downloadReplays urls path = do
-  lock <- Lock.new
-  catMaybes
-    <$> P.mapM (\u -> downloadReplay lock u path >>= unwrapOrPrintError lock) urls
+    lock <- Lock.new
+    catMaybes
+        <$> P.mapM
+            (\u -> downloadReplay lock u path >>= unwrapOrPrintError lock)
+            urls
 
-unwrapOrPrintError :: Lock -> Either String (Maybe FilePath) -> IO (Maybe FilePath)
+unwrapOrPrintError ::
+    Lock ->
+    Either String (Maybe FilePath) ->
+    IO (Maybe FilePath)
 unwrapOrPrintError lock (Left e) =
-  Lock.with lock $ putStrLn ("*** " ++ e) >> return Nothing
+    Lock.with lock $ putStrLn ("*** " ++ e) >> return Nothing
 unwrapOrPrintError _ (Right p) = return p
 
 maybeToEither :: b -> Maybe a -> Either b a
@@ -94,17 +106,17 @@ maybeToEither = flip maybe Right . Left
 
 fileNameFromUrl :: Url -> Either String Text
 fileNameFromUrl (Url url) = do
-  let splitUrl = T.splitOn "?" url
-  queryParams <- case splitUrl of
-    (_ : ps : _) -> Right ps
-    _ -> Left $ "Error getting query parameters from url: " ++ show url
-  logName <-
-    maybeToEither
-      ( "Error getting log name from query parameters: "
-          ++ T.unpack queryParams
-      )
-      $ T.stripPrefix "log=" queryParams
-  return $ T.append logName ".mjlog"
+    let splitUrl = T.splitOn "?" url
+    queryParams <- case splitUrl of
+        (_ : ps : _) -> Right ps
+        _ -> Left $ "Error getting query parameters from url: " ++ show url
+    logName <-
+        maybeToEither
+            ( "Error getting log name from query parameters: "
+                ++ T.unpack queryParams
+            )
+            $ T.stripPrefix "log=" queryParams
+    return $ T.append logName ".mjlog"
 
 shouldDownload :: FilePath -> IO Bool
 shouldDownload path = not <$> doesFileExist path
