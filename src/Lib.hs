@@ -5,6 +5,7 @@ module Lib where
 import Control.Concurrent.Lock (Lock)
 import qualified Control.Concurrent.Lock as Lock
 import Control.Lens (view, (.~), (^.))
+import Control.Monad ((>=>))
 import Control.Monad.Catch (catchAll)
 import qualified Control.Monad.Parallel as P
 import Data.ByteString.Lazy (ByteString)
@@ -33,6 +34,14 @@ newtype TenhouID = TenhouID {getTenhouID :: Text}
 newtype Url = Url {getUrl :: Text}
     deriving (Show)
 
+app :: TenhouID -> FilePath -> IO ()
+app tenhouId path = do
+    tags <- getTags tenhouId
+    count <- length <$> downloadReplays (parseDownloadUrls tags) path
+    putStrLn $
+        "\nDownloaded " ++ show count ++ " replay"
+            ++ if count /= 1 then "s" else ""
+
 getResponse :: TenhouID -> IO (Response ByteString)
 getResponse (TenhouID tenhouId) =
     let options = W.defaults & W.param "un" .~ [tenhouId]
@@ -58,30 +67,6 @@ parseDownloadUrls tags =
     downloadLinks = filter ((== "DOWNLOAD") . fromTagText . (!! 1)) aSections
     aHref = BS.append "https://tenhou.net" . fromAttrib "href" . head
 
-downloadReplay :: Lock -> Url -> FilePath -> IO (Either String (Maybe FilePath))
-downloadReplay lock url path =
-    let efileName = fileNameFromUrl url
-     in case efileName of
-            Left e -> return $ Left e
-            Right fileName -> do
-                let subdir = T.take 6 fileName
-                let downloadPath = path </> T.unpack subdir
-                let fullPath = downloadPath </> T.unpack fileName
-                needsDownload <- shouldDownload fullPath
-                if needsDownload
-                    then do
-                        createDirectoryIfMissing True downloadPath
-                        replay <- getResponseFromUrl url
-                        Lock.with lock $
-                            putStrLn $
-                                T.unpack (getUrl url)
-                                    ++ " ==>\n  "
-                                    ++ fullPath
-                        BS.writeFile fullPath $ replay ^. responseBody
-                        return $ Right $ Just fullPath
-                    else return $ Right Nothing
-            `catchAll` \e -> return $ Left $ show e
-
 getResponseFromUrl :: Url -> IO (Response ByteString)
 getResponseFromUrl (Url url) = get $ T.unpack url
 
@@ -90,16 +75,37 @@ downloadReplays urls path = do
     lock <- Lock.new
     catMaybes
         <$> P.mapM
-            (\u -> downloadReplay lock u path >>= unwrapOrPrintError lock)
+            (downloadReplay lock path >=> unwrapOrPrintError lock)
             urls
 
-unwrapOrPrintError ::
-    Lock ->
-    Either String (Maybe FilePath) ->
-    IO (Maybe FilePath)
-unwrapOrPrintError lock (Left e) =
-    Lock.with lock $ putStrLn ("*** " ++ e) >> return Nothing
-unwrapOrPrintError _ (Right p) = return p
+downloadReplay :: Lock -> FilePath -> Url -> IO (Either String (Maybe FilePath))
+downloadReplay lock path url = do
+    case fileNameFromUrl url of
+        Left e -> return $ Left e
+        Right fileName -> do
+            let subdir = T.take 6 fileName
+            let downloadPath = path </> T.unpack subdir
+            let fullPath = downloadPath </> T.unpack fileName
+            needsDownload <- shouldDownload fullPath
+            if needsDownload
+                then do
+                    createDirectoryIfMissing True downloadPath
+                    replay <- getResponseFromUrl url
+                    Lock.with lock $
+                        putStrLn $
+                            T.unpack (getUrl url)
+                                ++ " ==>\n  "
+                                ++ fullPath
+                    BS.writeFile fullPath $ replay ^. responseBody
+                    return $ Right $ Just fullPath
+                else return $ Right Nothing
+        `catchAll` \e -> return $ Left $ show e
+
+unwrapOrPrintError :: Lock -> Either [Char] (Maybe a) -> IO (Maybe a)
+unwrapOrPrintError lock (Left e) = do
+    Lock.with lock $ putStrLn ("*** " ++ e)
+    return Nothing
+unwrapOrPrintError _ (Right x) = return x
 
 maybeToEither :: b -> Maybe a -> Either b a
 maybeToEither = flip maybe Right . Left
