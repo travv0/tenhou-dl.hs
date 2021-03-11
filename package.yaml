@@ -63,4 +63,3 @@ tests:
     dependencies:
     - tenhou-dl
     - hspec
-    - hspec-expectations
