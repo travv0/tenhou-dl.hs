@@ -1,0 +1,76 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.33.0.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: 13d69b8e5142f7151e5f37c95cac31aed2a3b26f9e715669ce56054b6dd46e44
+
+name:           tenhou-dl
+version:        1.2.0
+description:    Please see the README on GitHub at <https://github.com/githubuser/tenhou-dl#readme>
+homepage:       https://github.com/tssund93/tenhou-dl#readme
+bug-reports:    https://github.com/tssund93/tenhou-dl/issues
+author:         Travis
+maintainer:     tssund93@gmail.com
+copyright:      2019 Travis
+license:        BSD3
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+    README.md
+    ChangeLog.md
+
+source-repository head
+  type: git
+  location: https://github.com/tssund93/tenhou-dl
+
+library
+  exposed-modules:
+      Lib
+  other-modules:
+      Paths_tenhou_dl
+  hs-source-dirs:
+      src
+  ghc-options: -Wall -Werror
+  build-depends:
+      base >=4.7 && <5
+    , bytestring
+    , concurrent-extra
+    , directory
+    , either
+    , exceptions
+    , filepath
+    , lens
+    , monad-parallel
+    , tagsoup
+    , text
+    , wreq
+  default-language: Haskell2010
+
+executable tenhou-dl
+  main-is: Main.hs
+  other-modules:
+      Paths_tenhou_dl
+  hs-source-dirs:
+      app
+  ghc-options: -Wall -Werror -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+    base >=4.7 && <5,
+    tenhou-dl,
+    text
+  default-language: Haskell2010
+
+test-suite tenhou-dl-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      Paths_tenhou_dl
+  hs-source-dirs:
+      test
+  ghc-options: -Wall -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base >=4.7 && <5
+    , tenhou-dl
+    , hspec
+  default-language: Haskell2010
